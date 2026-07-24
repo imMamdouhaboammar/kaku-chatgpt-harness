@@ -24,8 +24,10 @@
       "name": "@kaku-harness/harnessd",
       "version": "0.0.1",
       "dependencies": {
+        "@kaku-harness/execution-local": "workspace:*",
         "@kaku-harness/observability": "workspace:*",
         "@kaku-harness/policy-adapter": "workspace:*",
+        "@kaku-harness/protocol": "workspace:*",
         "@kaku-harness/session-core": "workspace:*",
       },
     },

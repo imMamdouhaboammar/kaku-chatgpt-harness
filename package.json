@@ -13,7 +13,7 @@
     "dev:cli": "bun run apps/harnessctl/src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build": "bun build apps/harnessd/src/index.ts apps/harnessctl/src/index.ts --outdir dist",
+    "build": "bun build --target=bun apps/harnessd/src/index.ts apps/harnessctl/src/index.ts --outdir dist",
     "verify": "bun run typecheck && bun test && bun run build"
   },
   "devDependencies": {
