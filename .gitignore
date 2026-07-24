@@ -18,3 +18,9 @@ build/
 # OS Metadata
 .DS_Store
 Thumbs.db
+
+# Internal Dev Docs & Plan Files
+*_PLAN.md
+*PLAN*.md
+docs/internal/
+
