@@ -1,0 +1,13 @@
+{
+  "name": "@kaku-harness/execution-local",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@kaku-harness/policy-adapter": "workspace:*",
+    "@kaku-harness/session-core": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test"
+  }
+}
