@@ -24,3 +24,6 @@ Thumbs.db
 *PLAN*.md
 docs/internal/
 
+# Isolated development worktrees
+.worktrees/
+
