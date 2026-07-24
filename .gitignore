@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Logs & Runtime files
+*.log
+/tmp/
+.agent-kernel/
+.env
+.env.local
+.env.*.local
+
+# OS Metadata
+.DS_Store
+Thumbs.db

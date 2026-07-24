@@ -1,0 +1,14 @@
+{
+  "name": "@kaku-harness/harnessd",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@kaku-harness/session-core": "workspace:*",
+    "@kaku-harness/policy-adapter": "workspace:*",
+    "@kaku-harness/observability": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test"
+  }
+}

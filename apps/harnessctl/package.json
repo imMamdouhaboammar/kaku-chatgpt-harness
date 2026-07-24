@@ -1,0 +1,16 @@
+{
+  "name": "@kaku-harness/harnessctl",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "harnessctl": "src/index.ts"
+  },
+  "dependencies": {
+    "@kaku-harness/session-core": "workspace:*",
+    "@kaku-harness/observability": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test"
+  }
+}
