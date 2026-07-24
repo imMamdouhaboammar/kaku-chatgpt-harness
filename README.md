@@ -20,7 +20,7 @@ The executable core currently provides:
 - Project boundary and capability policy checks
 - Three local tools: `fs.readText`, `fs.list`, and `process.run`
 - Process execution without shell interpolation
-- macOS sandbox isolation for project-scoped commands, with sanitized child environments and process-group termination
+- macOS sandbox isolation for project-scoped commands, with host-file and network denial, sanitized child environments, and process-group termination
 - Bounded process output and command timeouts
 - Verified atomic runtime installation, health probing, rollback, and integration restoration
 - Redacted mode `0600` JSONL logs

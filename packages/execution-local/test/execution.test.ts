@@ -115,6 +115,26 @@ describe("LocalExecutor", () => {
     }
   });
 
+  test("blocks network access for project-scoped processes", async () => {
+    const { root, lease } = setup();
+    const server = Bun.serve({ port: 0, fetch: () => new Response("reachable") });
+
+    try {
+      expect(await fetch(`http://127.0.0.1:${server.port}`).then((response) => response.text())).toBe("reachable");
+      const result = await new LocalExecutor().execute("process.run", {
+        command: process.execPath,
+        args: ["-e", `console.log(await fetch('http://127.0.0.1:${server.port}').then(r => r.text()))`],
+        cwd: root,
+        timeoutMs: 2_000
+      }, lease);
+
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stdout).not.toContain("reachable");
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("rejects unknown tools", async () => {
     const { lease } = setup();
 

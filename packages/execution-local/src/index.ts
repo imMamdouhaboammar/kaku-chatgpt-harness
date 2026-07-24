@@ -259,8 +259,7 @@ function buildSandboxProfile(projectRoot: string, processTemp: string): string {
     "(allow sysctl-read)",
     `(allow file-read* file-test-existence file-map-executable\n${readable})`,
     `(allow file-read-metadata file-test-existence\n  (path-ancestors \"${sbplEscape(projectRoot)}\")\n  (path-ancestors \"${sbplEscape(processTemp)}\"))`,
-    `(allow file-write* file-test-existence\n  (subpath \"${sbplEscape(projectRoot)}\")\n  (subpath \"${sbplEscape(processTemp)}\"))`,
-    "(allow network*)"
+    `(allow file-write* file-test-existence\n  (subpath \"${sbplEscape(projectRoot)}\")\n  (subpath \"${sbplEscape(processTemp)}\"))`
   ].join("\n");
 }
 

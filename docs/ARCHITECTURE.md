@@ -42,7 +42,7 @@ Kaku Terminal is the operator interface. `harnessd` is the local control plane. 
 
 ### execution-local
 
-`packages/execution-local` implements the current tool allowlist. Process execution uses an executable plus an argument array with `shell: false`. Project-scoped commands run inside a macOS `sandbox-exec` profile that limits filesystem access to the authenticated project and an isolated temporary directory, strips daemon secrets from the child environment, and terminates the entire process group on timeout or output overflow.
+`packages/execution-local` implements the current tool allowlist. Process execution uses an executable plus an argument array with `shell: false`. Project-scoped commands run inside a macOS `sandbox-exec` profile that limits filesystem access to the authenticated project and an isolated temporary directory, denies network access, strips daemon secrets from the child environment, and terminates the entire process group on timeout or output overflow.
 
 ### runtime deployment
 
