@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@harness/session-core": ["./packages/session-core/src/index.ts"],
+      "@harness/observability": ["./packages/observability/src/index.ts"],
+      "@harness/secrets": ["./packages/secrets/src/index.ts"],
+      "@harness/policy-adapter": ["./packages/policy-adapter/src/index.ts"],
+      "@harness/skill-index": ["./packages/skill-index/src/index.ts"],
+      "@harness/workspace": ["./packages/workspace/src/index.ts"],
+      "@harness/subagents": ["./packages/subagents/src/index.ts"],
+      "@harness/execution-dc": ["./packages/execution-dc/src/index.ts"]
+    }
+  },
+  "include": ["apps/**/*", "packages/**/*", "tests/**/*"]
+}

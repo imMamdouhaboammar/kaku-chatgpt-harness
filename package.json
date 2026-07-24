@@ -1,0 +1,22 @@
+{
+  "name": "kaku-chatgpt-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test tests/",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration",
+    "test:security": "bun test tests/security",
+    "test:gates": "bun test tests/gates",
+    "build": "bun build ./apps/harnessd/src/index.ts --outdir ./dist/harnessd && bun build ./apps/harnessctl/src/cli.ts --outdir ./dist/harnessctl",
+    "harnessctl": "bun run ./apps/harnessctl/src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

@@ -1,0 +1,22 @@
+# Dependencies & Lockfiles
+node_modules/
+bun.lock
+bun.lockb
+package-lock.json
+
+# Build outputs
+dist/
+build/
+.out/
+
+# Harness Local Runtime State & Logs
+.harnessd/
+*.log
+*.jsonl
+/tmp/
+
+# OS & IDE Files
+.DS_Store
+.vscode/
+.idea/
+*.swp
