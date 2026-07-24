@@ -4,8 +4,8 @@ A local control plane for authenticated ChatGPT coding sessions on macOS through
 
 The project separates development source from the installed runtime:
 
-- Development source: `/Users/mamdouhaboammar/Documents/Kaku-ChatGPT-Harness`
-- Installed runtime: `/Users/mamdouhaboammar/kaku-chatgpt-harness`
+- Development source: the repository root containing this README
+- Installed runtime: `${HOME}/kaku-chatgpt-harness` by default, or the path supplied to the installer
 
 Do not edit the installed runtime by hand. Develop and verify changes in the source repository, then install a verified commit.
 
@@ -20,7 +20,9 @@ The executable core currently provides:
 - Project boundary and capability policy checks
 - Three local tools: `fs.readText`, `fs.list`, and `process.run`
 - Process execution without shell interpolation
+- macOS sandbox isolation for project-scoped commands, with sanitized child environments and process-group termination
 - Bounded process output and command timeouts
+- Verified atomic runtime installation, health probing, rollback, and integration restoration
 - Redacted mode `0600` JSONL logs
 - A real `harnessctl` client for doctor, status, connect, and disconnect
 - Unit, integration, and security regression tests
@@ -37,7 +39,7 @@ This repository does not yet claim completion of authenticated public tunneling,
 ## Development setup
 
 ```bash
-cd /Users/mamdouhaboammar/Documents/Kaku-ChatGPT-Harness
+cd /path/to/Kaku-ChatGPT-Harness
 bun install --frozen-lockfile
 bun run verify
 ```

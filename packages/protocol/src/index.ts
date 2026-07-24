@@ -30,6 +30,7 @@ export class JsonRpcProtocolError extends Error {
     message: string,
     public readonly data?: unknown
   ) {
+    assertIntegerCode(code);
     super(message);
     this.name = "JsonRpcProtocolError";
   }
@@ -55,7 +56,7 @@ export function parseJsonRpcRequest(value: unknown): JsonRpcRequest {
   return {
     jsonrpc: "2.0",
     ...(Object.hasOwn(value, "id") ? { id: value.id as JsonRpcId } : {}),
-    method: value.method.trim(),
+    method: value.method,
     ...(value.params === undefined ? {} : { params: value.params as JsonRpcParams })
   };
 }
@@ -70,6 +71,7 @@ export function jsonRpcError(
   message: string,
   data?: unknown
 ): JsonRpcFailure {
+  assertIntegerCode(code);
   return {
     jsonrpc: "2.0",
     id,
@@ -79,6 +81,12 @@ export function jsonRpcError(
       ...(data === undefined ? {} : { data })
     }
   };
+}
+
+function assertIntegerCode(code: number): void {
+  if (!Number.isInteger(code)) {
+    throw new TypeError("JSON-RPC error code must be an integer.");
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

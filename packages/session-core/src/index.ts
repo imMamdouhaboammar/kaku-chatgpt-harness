@@ -56,9 +56,12 @@ export class SessionManager {
       throw new Error(`Active session capacity of ${this.maxSessions} has been reached.`);
     }
 
+    if (typeof input.client !== "string") throw new Error("Session client identity is required.");
     const client = input.client.trim();
     if (!client) throw new Error("Session client identity is required.");
-    if (!isAbsolute(input.projectRoot)) throw new Error("Session projectRoot must be absolute.");
+    if (typeof input.projectRoot !== "string" || !isAbsolute(input.projectRoot)) {
+      throw new Error("Session projectRoot must be absolute.");
+    }
 
     const profile = input.profile ?? "project-write";
     if (!PROFILES.has(profile)) throw new Error(`Unsupported capability profile: ${String(profile)}`);

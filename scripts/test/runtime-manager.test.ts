@@ -262,25 +262,32 @@ test("explicit rollback restores the previous legacy release", async () => {
 });
 
 
-test("uninstall removes only managed runtime artifacts", async () => {
+test("uninstall restores pre-existing integrations and removes runtime-owned state", async () => {
   const context = setup();
   mkdirSync(context.destination, { recursive: true });
-  mkdirSync(`${context.destination}.previous`, { recursive: true });
-  writeFileSync(join(context.destination, "current.txt"), "current");
-  writeFileSync(join(`${context.destination}.previous`, "previous.txt"), "previous");
+  writeFileSync(join(context.destination, "legacy.txt"), "legacy runtime");
 
-  const managedPaths = [
-    join(context.homeDir, ".local", "bin", "harnessctl"),
-    join(context.homeDir, ".config", "kaku", "zsh", "plugins", "chatgpt-harness.zsh"),
-    join(context.homeDir, "Library", "LaunchAgents", "com.kaku.chatgpt-harness.plist"),
-    join(context.homeDir, "Library", "LaunchAgents", "com.kaku.harnessd.plist"),
-    join(context.homeDir, ".kaku-harness", "session.json"),
-    join(context.homeDir, ".kaku-harness", "bootstrap-token")
-  ];
-  for (const path of managedPaths) {
+  const originalIntegrations = new Map([
+    [join(context.homeDir, ".local", "bin", "harnessctl"), "original cli\n"],
+    [join(context.homeDir, ".config", "kaku", "zsh", "plugins", "chatgpt-harness.zsh"), "original plugin\n"],
+    [join(context.homeDir, "Library", "LaunchAgents", "com.kaku.chatgpt-harness.plist"), "original current plist\n"],
+    [join(context.homeDir, "Library", "LaunchAgents", "com.kaku.harnessd.plist"), `<plist>${context.destination}</plist>\n`]
+  ]);
+  for (const [path, content] of originalIntegrations) {
     mkdirSync(join(path, ".."), { recursive: true });
-    writeFileSync(path, "managed\n");
+    writeFileSync(path, content);
   }
+
+  await installRuntime({
+    sourceRoot: context.sourceRoot,
+    destination: context.destination,
+    homeDir: context.homeDir,
+    bootstrapToken: "uninstall-test-token",
+    port: 8765,
+    start: true
+  }, hooks(true, []));
+  const sessionPath = join(context.homeDir, ".kaku-harness", "session.json");
+  writeFileSync(sessionPath, "session\n", { mode: 0o600 });
   const unrelated = join(context.homeDir, "keep-me.txt");
   writeFileSync(unrelated, "keep");
   const events: string[] = [];
@@ -297,6 +304,8 @@ test("uninstall removes only managed runtime artifacts", async () => {
   expect(events).toEqual(["stop"]);
   expect(existsSync(context.destination)).toBeFalse();
   expect(existsSync(`${context.destination}.previous`)).toBeFalse();
-  for (const path of managedPaths) expect(existsSync(path)).toBeFalse();
+  for (const [path, content] of originalIntegrations) expect(readFileSync(path, "utf8")).toBe(content);
+  expect(existsSync(sessionPath)).toBeFalse();
+  expect(existsSync(join(context.homeDir, ".kaku-harness", "bootstrap-token"))).toBeFalse();
   expect(readFileSync(unrelated, "utf8")).toBe("keep");
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { handleCli, parseArgs } from "../src/index";
 import type { CliRuntime } from "../src/index";
 
@@ -82,6 +82,8 @@ describe("harnessctl CLI", () => {
     expect((calls[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer bootstrap-private");
     expect(state.token).toBe("harness_private_token");
     expect((statSync(statePath).mode & 0o777).toString(8)).toBe("600");
+    expect((statSync(dirname(statePath)).mode & 0o777).toString(8)).toBe("700");
+    expect(readdirSync(dirname(statePath)).filter((name) => name.includes(".tmp-"))).toEqual([]);
     expect(context.stdout.join("\n")).not.toContain("harness_private_token");
     expect(context.stdout.join("\n")).toContain("session-123");
   });
@@ -110,6 +112,67 @@ describe("harnessctl CLI", () => {
     expect(deleteRequest?.method).toBe("DELETE");
     expect((deleteRequest?.headers as Record<string, string>).Authorization).toBe("Bearer harness_delete_token");
     expect(() => readFileSync(join(context.homeDir, ".kaku-harness", "session.json"))).toThrow();
+  });
+
+  test("rejects a daemon lease endpoint outside the configured origin", async () => {
+    const mockFetch = (async () => new Response(JSON.stringify({
+      sessionId: "session-evil",
+      token: "harness_evil_token",
+      client: "chatgpt",
+      profile: "project-write",
+      endpoint: "https://evil.example/session"
+    }), { status: 201 })) as CliRuntime["fetch"];
+    const context = runtime(mockFetch, { HARNESS_BOOTSTRAP_TOKEN: "bootstrap" });
+
+    const exitCode = await handleCli(["connect", "chatgpt", "--project", "/tmp/project"], context.runtime);
+
+    expect(exitCode).toBe(1);
+    expect(existsSync(join(context.homeDir, ".kaku-harness", "session.json"))).toBeFalse();
+    expect(context.stderr.join("\n")).toContain("invalid lease endpoint");
+  });
+
+  test("rejects an off-origin endpoint loaded from persisted state", async () => {
+    let fetchCalled = false;
+    const context = runtime((async () => {
+      fetchCalled = true;
+      return new Response(null, { status: 204 });
+    }) as CliRuntime["fetch"]);
+    const stateDirectory = join(context.homeDir, ".kaku-harness");
+    mkdirSync(stateDirectory, { recursive: true, mode: 0o700 });
+    writeFileSync(join(stateDirectory, "session.json"), JSON.stringify({
+      baseUrl: "http://127.0.0.1:8765",
+      endpoint: "https://evil.example/session",
+      sessionId: "session-persisted",
+      token: "harness_persisted_token",
+      client: "chatgpt",
+      profile: "project-write",
+      projectRoot: "/tmp/project",
+      createdAt: new Date().toISOString()
+    }), { mode: 0o600 });
+
+    const exitCode = await handleCli(["disconnect"], context.runtime);
+
+    expect(exitCode).toBe(1);
+    expect(fetchCalled).toBeFalse();
+    expect(context.stderr.join("\n")).toContain("No stored session");
+  });
+
+  test("does not reuse the predictable legacy temporary state path", async () => {
+    const mockFetch = (async () => new Response(JSON.stringify({
+      sessionId: "session-random-temp",
+      token: "harness_random_temp_token",
+      client: "chatgpt",
+      profile: "project-write",
+      endpoint: "/mcp/v1/session/session-random-temp"
+    }), { status: 201 })) as CliRuntime["fetch"];
+    const context = runtime(mockFetch, { HARNESS_BOOTSTRAP_TOKEN: "bootstrap" });
+    const stateDirectory = join(context.homeDir, ".kaku-harness");
+    mkdirSync(join(stateDirectory, `session.json.tmp-${process.pid}`), { recursive: true });
+
+    const exitCode = await handleCli(["connect", "chatgpt", "--project", "/tmp/project"], context.runtime);
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(stateDirectory, "session.json"))).toBeTrue();
   });
 
   test("connect reads the private bootstrap token file when env is unset", async () => {

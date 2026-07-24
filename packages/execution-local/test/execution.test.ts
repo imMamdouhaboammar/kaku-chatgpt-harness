@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LocalExecutionError, LocalExecutor } from "../src/index";
@@ -67,6 +67,54 @@ describe("LocalExecutor", () => {
     });
   });
 
+  test("blocks symlink escapes for file reads and directory listings", async () => {
+    const { root, lease } = setup();
+    const outside = mkdtempSync(join(tmpdir(), "kaku-outside-"));
+    fixtures.push(outside);
+    writeFileSync(join(outside, "secret.txt"), "outside secret");
+    symlinkSync(join(outside, "secret.txt"), join(root, "linked-secret.txt"));
+    symlinkSync(outside, join(root, "linked-directory"));
+    const executor = new LocalExecutor();
+
+    await expect(executor.execute("fs.readText", { path: "linked-secret.txt" }, lease)).rejects.toMatchObject({
+      code: "PATH_OUTSIDE_PROJECT"
+    });
+    await expect(executor.execute("fs.list", { path: "linked-directory" }, lease)).rejects.toMatchObject({
+      code: "PATH_OUTSIDE_PROJECT"
+    });
+  });
+
+  test("sandboxes project-scoped processes from host files and secrets", async () => {
+    const { root, lease } = setup();
+    const outside = mkdtempSync(join(tmpdir(), "kaku-host-"));
+    fixtures.push(outside);
+    const outsideFile = join(outside, "host-secret.txt");
+    writeFileSync(outsideFile, "host secret");
+    const previousToken = process.env.HARNESS_BOOTSTRAP_TOKEN;
+    process.env.HARNESS_BOOTSTRAP_TOKEN = "bootstrap-should-not-leak";
+
+    try {
+      const executor = new LocalExecutor();
+      const outsideResult = await executor.execute("process.run", {
+        command: "/bin/cat",
+        args: [outsideFile],
+        cwd: root
+      }, lease);
+      const environmentResult = await executor.execute("process.run", {
+        command: "/usr/bin/env",
+        cwd: root
+      }, lease);
+
+      expect(outsideResult.exitCode).not.toBe(0);
+      expect(outsideResult.stdout).not.toContain("host secret");
+      expect(environmentResult.stdout).not.toContain("HARNESS_BOOTSTRAP_TOKEN");
+      expect(environmentResult.stdout).not.toContain("bootstrap-should-not-leak");
+    } finally {
+      if (previousToken === undefined) delete process.env.HARNESS_BOOTSTRAP_TOKEN;
+      else process.env.HARNESS_BOOTSTRAP_TOKEN = previousToken;
+    }
+  });
+
   test("rejects unknown tools", async () => {
     const { lease } = setup();
 
@@ -106,4 +154,34 @@ describe("LocalExecutor", () => {
       cwd: root
     }, lease)).rejects.toMatchObject({ code: "TIMEOUT" });
   });
+
+  test("kills descendant processes when a command times out", async () => {
+    const { root, lease } = setup();
+    const scriptPath = join(root, "spawn-descendant.sh");
+    const pidPath = join(root, "descendant.pid");
+    writeFileSync(scriptPath, `#!/bin/sh\nsleep 30 >/dev/null 2>&1 &\necho $! > ${pidPath}\nwait\n`, { mode: 0o700 });
+    const executor = new LocalExecutor({ commandTimeoutMs: 150 });
+
+    await expect(executor.execute("process.run", {
+      command: "/bin/sh",
+      args: [scriptPath],
+      cwd: root
+    }, lease)).rejects.toMatchObject({ code: "TIMEOUT" });
+
+    const descendantPid = Number(readFileSync(pidPath, "utf8").trim());
+    try {
+      expect(processIsAlive(descendantPid)).toBeFalse();
+    } finally {
+      if (processIsAlive(descendantPid)) process.kill(descendantPid, "SIGKILL");
+    }
+  });
 });
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

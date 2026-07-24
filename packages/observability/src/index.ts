@@ -48,7 +48,37 @@ export class RedactedLogger {
     if (value === null || typeof value !== "object") return value;
     if (seen.has(value)) return "[CIRCULAR]";
     seen.add(value);
+
+    if (value instanceof Date) return this.redact(value.toISOString());
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: this.redact(value.message),
+        stack: value.stack ? this.redact(value.stack) : undefined,
+        cause: value.cause === undefined ? undefined : this.redactValue(value.cause, "cause", seen)
+      };
+    }
+    if (value instanceof Map) {
+      return {
+        type: "Map",
+        entries: Array.from(value.entries()).map(([entryKey, entryValue]) => [
+          this.redactValue(entryKey, undefined, seen),
+          this.redactValue(entryValue, typeof entryKey === "string" ? entryKey : undefined, seen)
+        ])
+      };
+    }
+    if (value instanceof Set) {
+      return { type: "Set", values: Array.from(value.values()).map((item) => this.redactValue(item, undefined, seen)) };
+    }
     if (Array.isArray(value)) return value.map((item) => this.redactValue(item, undefined, seen));
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      return {
+        type: value.constructor?.name ?? "Object",
+        value: this.redact(String(value))
+      };
+    }
 
     return Object.fromEntries(
       Object.entries(value).map(([childKey, childValue]) => [

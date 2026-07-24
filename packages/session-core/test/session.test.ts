@@ -15,16 +15,18 @@ describe("SessionManager", () => {
     expect(mgr.currentClient).toBe("chatgpt");
   });
 
-  test("rejects empty client identities", () => {
+  test("rejects invalid client identities", () => {
     const mgr = new SessionManager();
 
     expect(() => mgr.createSession({ client: "   ", projectRoot })).toThrow("client");
+    expect(() => mgr.createSession({ client: 42 as unknown as string, projectRoot })).toThrow("client");
   });
 
-  test("rejects relative project roots", () => {
+  test("rejects invalid project roots", () => {
     const mgr = new SessionManager();
 
     expect(() => mgr.createSession({ client: "chatgpt", projectRoot: "relative/project" })).toThrow("absolute");
+    expect(() => mgr.createSession({ client: "chatgpt", projectRoot: null as unknown as string })).toThrow("absolute");
   });
 
   test("rejects full-local unless explicitly enabled", () => {

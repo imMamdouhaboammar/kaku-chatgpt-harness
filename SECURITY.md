@@ -27,6 +27,7 @@ The following conditions are release blockers:
 - Log files and CLI session state must use mode `0600`.
 - Project-scoped profiles must reject sibling-prefix and symlink path escapes.
 - Process execution must use executable and argument arrays without shell interpolation.
+- Project-scoped process execution must fail closed without the macOS sandbox, strip daemon credentials from child environments, and terminate whole process groups on limits.
 - Every tool call must pass authentication, protocol validation, and policy evaluation.
 - `full-local` must remain disabled by default.
 - The installed runtime must come from a clean commit that passed `bun run verify`.

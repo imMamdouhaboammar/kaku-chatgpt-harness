@@ -19,10 +19,11 @@ describe("JSON-RPC protocol boundary", () => {
     expect(request.method).toBe("tools/call");
   });
 
-  test("accepts notifications without an id", () => {
-    const request = parseJsonRpcRequest({ jsonrpc: "2.0", method: "notifications/initialized" });
+  test("accepts notifications without an id and preserves the method selector", () => {
+    const request = parseJsonRpcRequest({ jsonrpc: "2.0", method: " notifications/initialized " });
 
     expect(request.id).toBeUndefined();
+    expect(request.method).toBe(" notifications/initialized ");
   });
 
   test("rejects non-object requests", () => {
@@ -42,6 +43,12 @@ describe("JSON-RPC protocol boundary", () => {
 
   test("rejects primitive params", () => {
     expect(() => parseJsonRpcRequest({ jsonrpc: "2.0", id: 1, method: "tools/call", params: "bad" })).toThrow("params");
+  });
+
+  test("rejects non-integer error codes", () => {
+    expect(() => new JsonRpcProtocolError(1.5, "bad code")).toThrow("integer");
+    expect(() => jsonRpcError(null, Number.NaN, "bad code")).toThrow("integer");
+    expect(() => jsonRpcError(null, Number.POSITIVE_INFINITY, "bad code")).toThrow("integer");
   });
 
   test("builds standard result and error responses", () => {

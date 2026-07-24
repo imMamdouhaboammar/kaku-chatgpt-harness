@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import { open, readdir } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 import { PolicyAdapter } from "@kaku-harness/policy-adapter";
 import type { PolicyEvaluationRequest } from "@kaku-harness/policy-adapter";
 import type { SessionLease } from "@kaku-harness/session-core";
@@ -11,6 +13,7 @@ export interface LocalExecutorOptions {
   maxOutputBytes?: number;
   commandTimeoutMs?: number;
   maxDirectoryEntries?: number;
+  sandboxExecutable?: string;
 }
 
 export interface ReadTextResult {
@@ -45,12 +48,14 @@ export class LocalExecutor {
   private readonly maxOutputBytes: number;
   private readonly commandTimeoutMs: number;
   private readonly maxDirectoryEntries: number;
+  private readonly sandboxExecutable: string;
 
   constructor(options: LocalExecutorOptions = {}) {
     this.policy = options.policy ?? new PolicyAdapter();
     this.maxOutputBytes = positiveInteger(options.maxOutputBytes ?? 256 * 1024, "maxOutputBytes");
     this.commandTimeoutMs = positiveInteger(options.commandTimeoutMs ?? 30_000, "commandTimeoutMs");
     this.maxDirectoryEntries = positiveInteger(options.maxDirectoryEntries ?? 1_000, "maxDirectoryEntries");
+    this.sandboxExecutable = options.sandboxExecutable ?? "/usr/bin/sandbox-exec";
   }
 
   public execute(toolName: "fs.readText", args: { path: string }, lease: SessionLease): Promise<ReadTextResult>;
@@ -71,7 +76,7 @@ export class LocalExecutor {
   }
 
   private async readText(inputPath: string, lease: SessionLease): Promise<ReadTextResult> {
-    const targetPath = resolveForLease(inputPath, lease);
+    const targetPath = canonicalExistingPath(resolveForLease(inputPath, lease));
     this.assertPolicy({ action: "read", targetPath, projectRoot: lease.projectRoot, profile: lease.profile });
 
     const handle = await open(targetPath, "r");
@@ -91,7 +96,7 @@ export class LocalExecutor {
   }
 
   private async list(inputPath: string, lease: SessionLease): Promise<ListResult> {
-    const targetPath = resolveForLease(inputPath, lease);
+    const targetPath = canonicalExistingPath(resolveForLease(inputPath, lease));
     this.assertPolicy({ action: "read", targetPath, projectRoot: lease.projectRoot, profile: lease.profile });
 
     const directoryEntries = await readdir(targetPath, { withFileTypes: true });
@@ -109,7 +114,8 @@ export class LocalExecutor {
     const command = requireString(args.command, "command");
     const commandArgs = optionalStringArray(args.args, "args");
     const cwdInput = args.cwd === undefined ? lease.projectRoot : requireString(args.cwd, "cwd");
-    const cwd = resolveForLease(cwdInput, lease);
+    const cwd = canonicalExistingPath(resolveForLease(cwdInput, lease));
+    const projectRoot = canonicalExistingPath(lease.projectRoot);
     const requestedTimeout = args.timeoutMs === undefined
       ? this.commandTimeoutMs
       : positiveInteger(args.timeoutMs, "timeoutMs");
@@ -119,17 +125,33 @@ export class LocalExecutor {
       action: "execute",
       targetPath: cwd,
       command: [command, ...commandArgs].join(" "),
-      projectRoot: lease.projectRoot,
+      projectRoot,
       profile: lease.profile
     });
 
+    const requiresSandbox = lease.profile !== "full-local";
+    if (requiresSandbox && (process.platform !== "darwin" || !existsSync(this.sandboxExecutable))) {
+      throw new LocalExecutionError("SANDBOX_UNAVAILABLE", "Project-scoped process execution requires macOS sandbox-exec.");
+    }
+
+    const processTemp = mkdtempSync(join(tmpdir(), `kaku-harness-${safeIdentifier(lease.sessionId)}-`));
+    chmodSync(processTemp, 0o700);
+    const executable = requiresSandbox ? this.sandboxExecutable : command;
+    const spawnArgs = requiresSandbox
+      ? ["-p", buildSandboxProfile(projectRoot, processTemp), command, ...commandArgs]
+      : commandArgs;
+
     return new Promise((resolvePromise, rejectPromise) => {
       const startedAt = Date.now();
-      const child = spawn(command, commandArgs, {
+      const child = spawn(executable, spawnArgs, {
         cwd,
         shell: false,
+        detached: true,
+        env: sandboxEnvironment(processTemp),
         stdio: ["ignore", "pipe", "pipe"]
       });
+      if (child.pid) lease.processIds.push(child.pid);
+
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       let totalBytes = 0;
@@ -137,9 +159,15 @@ export class LocalExecutor {
       let outputExceeded = false;
       let settled = false;
 
+      const cleanup = () => {
+        clearTimeout(timer);
+        if (child.pid) lease.processIds = lease.processIds.filter((pid) => pid !== child.pid);
+        rmSync(processTemp, { recursive: true, force: true });
+      };
+      const terminate = () => terminateProcessGroup(child.pid);
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill("SIGKILL");
+        terminate();
       }, timeoutMs);
       timer.unref();
 
@@ -148,7 +176,7 @@ export class LocalExecutor {
         totalBytes += bytes.length;
         if (totalBytes > this.maxOutputBytes) {
           outputExceeded = true;
-          child.kill("SIGKILL");
+          terminate();
           return;
         }
         target.push(bytes);
@@ -159,18 +187,17 @@ export class LocalExecutor {
       child.once("error", (error) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        cleanup();
         rejectPromise(new LocalExecutionError("SPAWN_FAILED", error.message));
       });
       child.once("close", (exitCode) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        cleanup();
         if (outputExceeded) {
           rejectPromise(new LocalExecutionError("OUTPUT_LIMIT", `Process output exceeded ${this.maxOutputBytes} bytes.`));
           return;
         }
-
         if (timedOut) {
           rejectPromise(new LocalExecutionError("TIMEOUT", `Process exceeded the ${timeoutMs}ms timeout.`));
           return;
@@ -195,6 +222,84 @@ export class LocalExecutor {
 
 function resolveForLease(inputPath: string, lease: SessionLease): string {
   return isAbsolute(inputPath) ? resolve(inputPath) : resolve(lease.projectRoot, inputPath);
+}
+
+function canonicalExistingPath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    throw new LocalExecutionError("PATH_NOT_FOUND", `Path does not exist or cannot be resolved: ${path}`);
+  }
+}
+
+function buildSandboxProfile(projectRoot: string, processTemp: string): string {
+  const readableRoots = [
+    "/System",
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/dev",
+    "/Library/Apple",
+    "/Library/Developer",
+    "/Applications/Xcode.app",
+    "/opt/homebrew",
+    "/usr/local",
+    "/private/var/select",
+    projectRoot,
+    processTemp
+  ];
+  const readable = readableRoots.map((path) => `  (subpath \"${sbplEscape(path)}\")`).join("\n");
+
+  return [
+    "(version 1)",
+    "(deny default)",
+    "(import \"system.sb\")",
+    "(allow process*)",
+    "(allow signal (target same-sandbox))",
+    "(allow sysctl-read)",
+    `(allow file-read* file-test-existence file-map-executable\n${readable})`,
+    `(allow file-read-metadata file-test-existence\n  (path-ancestors \"${sbplEscape(projectRoot)}\")\n  (path-ancestors \"${sbplEscape(processTemp)}\"))`,
+    `(allow file-write* file-test-existence\n  (subpath \"${sbplEscape(projectRoot)}\")\n  (subpath \"${sbplEscape(processTemp)}\"))`,
+    "(allow network*)"
+  ].join("\n");
+}
+
+function sandboxEnvironment(processTemp: string): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {
+    PATH: "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+    HOME: processTemp,
+    TMPDIR: processTemp,
+    USER: process.env.USER,
+    LOGNAME: process.env.LOGNAME,
+    SHELL: "/bin/zsh",
+    LANG: process.env.LANG ?? "en_US.UTF-8",
+    LC_ALL: process.env.LC_ALL,
+    TERM: process.env.TERM,
+    NO_COLOR: process.env.NO_COLOR,
+    FORCE_COLOR: process.env.FORCE_COLOR
+  };
+  return Object.fromEntries(Object.entries(environment).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
+}
+
+function terminateProcessGroup(pid: number | undefined): void {
+  if (!pid) return;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // The process may already have exited.
+    }
+  }
+}
+
+function safeIdentifier(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64) || "session";
+}
+
+function sbplEscape(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 function requireString(value: unknown, name: string): string {

@@ -229,14 +229,15 @@ export async function uninstallRuntime(
 ): Promise<void> {
   const resolvedDestination = resolve(destination);
   const resolvedHome = resolve(homeDir);
+  const previousIntegrations = readPreviousIntegrationSnapshot(resolvedDestination, resolvedHome);
   await hooks.stopOwnedRuntime(resolvedDestination, resolvedHome, positiveInteger(port, "port"));
 
-  const managedFiles = [
-    ...managedIntegrationPaths(resolvedHome),
+  restoreManagedIntegrations(previousIntegrations);
+  const runtimeStateFiles = [
     join(resolvedHome, ".kaku-harness", "session.json"),
     join(resolvedHome, ".kaku-harness", "bootstrap-token")
   ];
-  for (const path of managedFiles) rmSync(path, { force: true });
+  for (const path of runtimeStateFiles) rmSync(path, { force: true });
   rmSync(resolvedDestination, { recursive: true, force: true });
   rmSync(`${resolvedDestination}.previous`, { recursive: true, force: true });
 }

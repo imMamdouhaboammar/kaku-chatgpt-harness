@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -80,13 +81,13 @@ export async function handleCli(args: string[], runtime: CliRuntime = defaultRun
   try {
     switch (parsed.command) {
       case "doctor":
-        return runDoctor(runtime, baseUrl);
+        return await runDoctor(runtime, baseUrl);
       case "status":
-        return runStatus(runtime, baseUrl);
+        return await runStatus(runtime, baseUrl);
       case "connect":
-        return runConnect(parsed, runtime, baseUrl);
+        return await runConnect(parsed, runtime, baseUrl);
       case "disconnect":
-        return runDisconnect(runtime);
+        return await runDisconnect(runtime);
       case "help":
       default:
         printHelp(runtime);
@@ -204,9 +205,10 @@ async function runConnect(parsed: ParsedArgs, runtime: CliRuntime, baseUrl: stri
     return 1;
   }
 
+  const endpoint = validateSessionEndpoint(baseUrl, lease.endpoint);
   const state: StoredSession = {
     baseUrl,
-    endpoint: lease.endpoint,
+    endpoint,
     sessionId: lease.sessionId,
     token: lease.token,
     client: lease.client,
@@ -231,7 +233,7 @@ async function runDisconnect(runtime: CliRuntime): Promise<number> {
     return 1;
   }
 
-  const response = await runtime.fetch(`${state.baseUrl}${state.endpoint}`, {
+  const response = await runtime.fetch(new URL(state.endpoint, state.baseUrl), {
     method: "DELETE",
     headers: { Authorization: `Bearer ${state.token}` }
   });
@@ -265,25 +267,62 @@ function sessionStatePath(homeDir: string): string {
 function writeSessionState(homeDir: string, state: StoredSession): void {
   const statePath = sessionStatePath(homeDir);
   const stateDirectory = dirname(statePath);
-  const temporaryPath = `${statePath}.tmp-${process.pid}`;
+  const temporaryPath = join(stateDirectory, `.session-${randomUUID()}.tmp`);
   mkdirSync(stateDirectory, { recursive: true, mode: 0o700 });
-  writeFileSync(temporaryPath, JSON.stringify(state, null, 2) + "\n", { mode: 0o600 });
-  renameSync(temporaryPath, statePath);
-  chmodSync(statePath, 0o600);
+  chmodSync(stateDirectory, 0o700);
+
+  try {
+    writeFileSync(temporaryPath, JSON.stringify(state, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+    renameSync(temporaryPath, statePath);
+    chmodSync(statePath, 0o600);
+  } finally {
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+  }
 }
 
 function readSessionState(path: string): StoredSession | null {
   try {
     const value = JSON.parse(readFileSync(path, "utf8")) as Partial<StoredSession>;
-    if (!value.baseUrl || !value.endpoint || !value.sessionId || !value.token || !value.client) return null;
-    return value as StoredSession;
+    if (
+      typeof value.baseUrl !== "string" ||
+      typeof value.endpoint !== "string" ||
+      typeof value.sessionId !== "string" ||
+      typeof value.token !== "string" ||
+      typeof value.client !== "string"
+    ) return null;
+
+    const baseUrl = normalizeEndpoint(value.baseUrl);
+    const endpoint = validateSessionEndpoint(baseUrl, value.endpoint);
+    return { ...value, baseUrl, endpoint } as StoredSession;
   } catch {
     return null;
   }
 }
 
 function normalizeEndpoint(value: string): string {
-  return value.replace(/\/+$/, "");
+  const endpoint = new URL(value);
+  if (!(["http:", "https:"] as string[]).includes(endpoint.protocol)) {
+    throw new Error("Harness endpoint must use HTTP or HTTPS.");
+  }
+  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+    throw new Error("Harness endpoint must not include credentials, query parameters, or fragments.");
+  }
+  if (endpoint.pathname !== "/") {
+    throw new Error("Harness endpoint must not include a path.");
+  }
+  return endpoint.origin;
+}
+
+function validateSessionEndpoint(baseUrl: string, endpoint: string): string {
+  if (!endpoint.startsWith("/") || endpoint.startsWith("//")) {
+    throw new Error("Daemon returned an invalid lease endpoint.");
+  }
+  const base = new URL(baseUrl);
+  const resolved = new URL(endpoint, base);
+  if (resolved.origin !== base.origin || resolved.hash) {
+    throw new Error("Daemon returned an invalid lease endpoint.");
+  }
+  return `${resolved.pathname}${resolved.search}`;
 }
 
 async function responseMessage(response: Response): Promise<string> {
