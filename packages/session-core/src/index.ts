@@ -16,6 +16,7 @@ export interface SessionLease {
 export class SessionManager {
   private sessions: Map<string, SessionLease> = new Map();
   private defaultTtlMs: number;
+  public currentClient: string = "uninitialized";
 
   constructor(defaultTtlMs = 3600 * 1000) {
     this.defaultTtlMs = defaultTtlMs;
@@ -25,10 +26,11 @@ export class SessionManager {
     const sessionId = crypto.randomUUID();
     const authToken = "harness_" + crypto.randomUUID().replace(/-/g, "");
     const now = Date.now();
+    this.currentClient = client || "chatgpt";
 
     const lease: SessionLease = {
       sessionId,
-      client,
+      client: this.currentClient,
       projectRoot,
       profile,
       authToken,
@@ -41,6 +43,10 @@ export class SessionManager {
 
     this.sessions.set(sessionId, lease);
     return lease;
+  }
+
+  public getCurrentClient(): string {
+    return this.currentClient;
   }
 
   public validateToken(sessionId: string, token: string): boolean {

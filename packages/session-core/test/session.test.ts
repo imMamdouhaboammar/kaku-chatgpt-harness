@@ -4,7 +4,10 @@ import { SessionManager } from "../src/index";
 describe("SessionManager", () => {
   test("creates a valid session lease with token", () => {
     const mgr = new SessionManager();
+    expect(mgr.currentClient).toBe("uninitialized");
     const lease = mgr.createSession("chatgpt", "/tmp/project");
+    expect(mgr.currentClient).toBe("chatgpt");
+    expect(mgr.getCurrentClient()).toBe("chatgpt");
     expect(lease.sessionId).toBeDefined();
     expect(lease.authToken).toStartWith("harness_");
     expect(lease.projectRoot).toBe("/tmp/project");
