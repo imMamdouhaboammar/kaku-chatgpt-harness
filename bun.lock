@@ -37,6 +37,10 @@
       "name": "@kaku-harness/policy-adapter",
       "version": "0.0.1",
     },
+    "packages/protocol": {
+      "name": "@kaku-harness/protocol",
+      "version": "0.0.1",
+    },
     "packages/session-core": {
       "name": "@kaku-harness/session-core",
       "version": "0.0.1",
@@ -50,6 +54,8 @@
     "@kaku-harness/observability": ["@kaku-harness/observability@workspace:packages/observability"],
 
     "@kaku-harness/policy-adapter": ["@kaku-harness/policy-adapter@workspace:packages/policy-adapter"],
+
+    "@kaku-harness/protocol": ["@kaku-harness/protocol@workspace:packages/protocol"],
 
     "@kaku-harness/session-core": ["@kaku-harness/session-core@workspace:packages/session-core"],
 
