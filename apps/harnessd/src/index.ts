@@ -21,6 +21,7 @@ export interface HarnessDaemonOptions {
   hostname?: string;
   logPath?: string;
   bootstrapToken?: string;
+  buildCommit?: string;
   allowFullLocal?: boolean;
   maxRequestBytes?: number;
   sessionTtlMs?: number;
@@ -35,6 +36,7 @@ export class HarnessDaemon {
   private readonly port: number;
   private readonly hostname: string;
   private readonly bootstrapToken: string;
+  private readonly buildCommit: string;
   private readonly maxRequestBytes: number;
   private readonly startedAt = Date.now();
 
@@ -43,6 +45,7 @@ export class HarnessDaemon {
     this.port = options.port ?? DEFAULT_PORT;
     this.hostname = options.hostname ?? "127.0.0.1";
     this.bootstrapToken = options.bootstrapToken ?? process.env.HARNESS_BOOTSTRAP_TOKEN ?? "";
+    this.buildCommit = options.buildCommit ?? process.env.HARNESS_BUILD_COMMIT ?? "development";
     this.maxRequestBytes = positiveInteger(options.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES, "maxRequestBytes");
     this.sessionMgr = new SessionManager({
       defaultTtlMs: options.sessionTtlMs,
@@ -92,6 +95,7 @@ export class HarnessDaemon {
     return jsonResponse({
       status: "ok",
       version: HARNESS_VERSION,
+      buildCommit: this.buildCommit,
       pid: process.pid,
       uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000),
       activeSessions: sessions.length,

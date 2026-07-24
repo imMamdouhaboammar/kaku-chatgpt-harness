@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { handleCli, parseArgs } from "../src/index";
@@ -22,8 +22,14 @@ function runtime(fetchImpl: CliRuntime["fetch"], env: Record<string, string | un
     homeDir,
     stdout: (line) => stdout.push(line),
     stderr: (line) => stderr.push(line),
-    exists: () => true,
-    fileMode: () => 0o600
+    exists: existsSync,
+    fileMode: (path) => {
+      try {
+        return statSync(path).mode & 0o777;
+      } catch {
+        return null;
+      }
+    }
   };
   return { runtime: value, homeDir, stdout, stderr };
 }
@@ -106,6 +112,29 @@ describe("harnessctl CLI", () => {
     expect(() => readFileSync(join(context.homeDir, ".kaku-harness", "session.json"))).toThrow();
   });
 
+  test("connect reads the private bootstrap token file when env is unset", async () => {
+    let authorization = "";
+    const mockFetch = (async (_input, init) => {
+      authorization = (init?.headers as Record<string, string>).Authorization;
+      return new Response(JSON.stringify({
+        sessionId: "session-file-token",
+        token: "harness_session_file_token",
+        client: "chatgpt",
+        profile: "project-write",
+        endpoint: "/mcp/v1/session/session-file-token"
+      }), { status: 201 });
+    }) as CliRuntime["fetch"];
+    const context = runtime(mockFetch);
+    const tokenDirectory = join(context.homeDir, ".kaku-harness");
+    mkdirSync(tokenDirectory, { recursive: true });
+    writeFileSync(join(tokenDirectory, "bootstrap-token"), "bootstrap-from-file\n", { mode: 0o600 });
+
+    const exitCode = await handleCli(["connect", "chatgpt", "--project", "/tmp/project"], context.runtime);
+
+    expect(exitCode).toBe(0);
+    expect(authorization).toBe("Bearer bootstrap-from-file");
+  });
+
   test("connect fails when bootstrap authentication is unavailable", async () => {
     const context = runtime((async () => {
       throw new Error("fetch should not run");
@@ -114,7 +143,7 @@ describe("harnessctl CLI", () => {
     const exitCode = await handleCli(["connect", "chatgpt", "--project", "/tmp/project"], context.runtime);
 
     expect(exitCode).toBe(1);
-    expect(context.stderr.join("\n")).toContain("HARNESS_BOOTSTRAP_TOKEN");
+    expect(context.stderr.join("\n")).toContain("bootstrap token");
   });
 
   test("doctor reports an unavailable daemon", async () => {

@@ -14,7 +14,11 @@
     "test": "bun test",
     "test:integration": "bun test tests/integration",
     "test:security": "bun test tests/security",
+    "test:installer": "bun test scripts/test",
     "typecheck": "tsc --noEmit",
+    "install:runtime": "./install.sh",
+    "rollback:runtime": "./install.sh --rollback",
+    "uninstall:runtime": "./uninstall.sh",
     "build": "bun build --target=bun apps/harnessd/src/index.ts apps/harnessctl/src/index.ts --outdir dist",
     "verify": "bun run typecheck && bun test && bun run build"
   },

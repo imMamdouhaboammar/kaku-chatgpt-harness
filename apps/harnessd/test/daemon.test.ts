@@ -59,6 +59,7 @@ describe("HarnessDaemon HTTP Gateway", () => {
     expect(data.status).toBe("ok");
     expect(data.pid).toBe(process.pid);
     expect(data.activeSessions).toBe(0);
+    expect(data.buildCommit).toBe("development");
     expect(typeof data.uptimeSeconds).toBe("number");
   });
 

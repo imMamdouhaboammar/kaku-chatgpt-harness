@@ -128,13 +128,33 @@ See [`SECURITY.md`](./SECURITY.md) for reporting and operational guidance.
 
 ## Development to runtime flow
 
-Until the verified installer is merged, keep development and runtime separate:
+Keep development and runtime separate. The installer refuses a dirty Git tree, runs `bun run verify`, records the exact source commit, swaps releases atomically, starts the managed LaunchAgent, and checks that `/health` reports the same commit.
 
-1. Work in the development repository or an isolated worktree.
-2. Run `bun run verify`.
-3. Review the committed diff and security-sensitive changes.
-4. Do not replace `/Users/mamdouhaboammar/kaku-chatgpt-harness` manually.
-5. Deploy only through the versioned installer and rollback flow once available.
+Install or update the runtime:
+
+```bash
+./install.sh
+```
+
+Preview verification without changing the runtime:
+
+```bash
+./install.sh --dry-run --no-start
+```
+
+Roll back by swapping the current and previous managed releases:
+
+```bash
+./install.sh --rollback
+```
+
+Remove the current runtime, previous release, managed LaunchAgents, Kaku plugin, CLI wrapper, and private session state:
+
+```bash
+./uninstall.sh
+```
+
+Optional location flags are `--destination`, `--home`, and `--port`. Bootstrap secrets are accepted only through `HARNESS_BOOTSTRAP_TOKEN` or the private file `~/.kaku-harness/bootstrap-token`; they are intentionally rejected as command-line arguments.
 
 ## Architecture
 

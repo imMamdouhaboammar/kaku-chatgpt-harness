@@ -174,9 +174,9 @@ async function runStatus(runtime: CliRuntime, baseUrl: string): Promise<number> 
 }
 
 async function runConnect(parsed: ParsedArgs, runtime: CliRuntime, baseUrl: string): Promise<number> {
-  const bootstrapToken = runtime.env.HARNESS_BOOTSTRAP_TOKEN;
+  const bootstrapToken = resolveBootstrapToken(runtime);
   if (!bootstrapToken) {
-    runtime.stderr("HARNESS_BOOTSTRAP_TOKEN is required to create a session.");
+    runtime.stderr("A bootstrap token is required in HARNESS_BOOTSTRAP_TOKEN or ~/.kaku-harness/bootstrap-token.");
     return 1;
   }
 
@@ -244,6 +244,18 @@ async function runDisconnect(runtime: CliRuntime): Promise<number> {
   unlinkSync(statePath);
   runtime.stdout(`[harnessctl disconnect] Session revoked: ${state.sessionId}`);
   return 0;
+}
+
+function resolveBootstrapToken(runtime: CliRuntime): string {
+  const fromEnvironment = runtime.env.HARNESS_BOOTSTRAP_TOKEN?.trim();
+  if (fromEnvironment) return fromEnvironment;
+
+  const tokenPath = join(runtime.homeDir, ".kaku-harness", "bootstrap-token");
+  if (!runtime.exists(tokenPath)) return "";
+  if (runtime.fileMode(tokenPath) !== 0o600) {
+    throw new Error(`Bootstrap token file must use mode 600: ${tokenPath}`);
+  }
+  return readFileSync(tokenPath, "utf8").trim();
 }
 
 function sessionStatePath(homeDir: string): string {
