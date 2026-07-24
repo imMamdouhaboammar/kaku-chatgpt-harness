@@ -1,54 +1,96 @@
-import { resolve } from "path";
+import { existsSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+
+export type PolicyAction = "read" | "write" | "execute";
+export type PolicyProfile = "read-only" | "project-write" | "full-local";
+export type PolicyDenialCode = "PROFILE_DENIED" | "COMMAND_DENIED" | "PATH_OUTSIDE_PROJECT" | "INVALID_REQUEST";
 
 export interface PolicyEvaluationRequest {
-  action: "read" | "write" | "execute";
+  action: PolicyAction;
   targetPath?: string;
   command?: string;
   projectRoot: string;
-  profile: "read-only" | "project-write" | "full-local";
+  profile: PolicyProfile;
 }
 
 export interface PolicyEvaluationResult {
   allowed: boolean;
+  code?: PolicyDenialCode;
   reason?: string;
 }
 
+export interface PolicyAdapterOptions {
+  allowFullLocal?: boolean;
+}
+
 export class PolicyAdapter {
-  private forbiddenCommands = [
-    /rm\s+-rf\s+\/($|\s)/i,
-    /mkfs/i,
-    /dd\s+if=/i,
-    /chmod\s+-R\s+777\s+\//i
+  private readonly allowFullLocal: boolean;
+  private readonly forbiddenCommands = [
+    /(^|\s)rm\s+-[^\n]*r[^\n]*f\s+\/(?:\s|$)/i,
+    /(^|\s)mkfs(?:\.|\s|$)/i,
+    /(^|\s)dd\s+[^\n]*if=/i,
+    /(^|\s)chmod\s+-R\s+777\s+\/(?:\s|$)/i,
+    /(^|\s)(?:sudo|su)\b/i
   ];
 
+  constructor(options: PolicyAdapterOptions = {}) {
+    this.allowFullLocal = options.allowFullLocal ?? false;
+  }
+
   public evaluate(request: PolicyEvaluationRequest): PolicyEvaluationResult {
-    // 1. Profile enforcement
-    if (request.profile === "read-only" && (request.action === "write" || request.action === "execute")) {
-      return { allowed: false, reason: "Action forbidden under 'read-only' capability profile." };
+    if (!request.projectRoot || !isAbsolute(request.projectRoot)) {
+      return deny("INVALID_REQUEST", "projectRoot must be an absolute path.");
     }
 
-    // 2. Command check
-    if (request.command) {
-      for (const pattern of this.forbiddenCommands) {
-        if (pattern.test(request.command)) {
-          return { allowed: false, reason: `Command matches forbidden policy pattern: ${request.command}` };
-        }
-      }
+    if (request.profile === "full-local" && !this.allowFullLocal) {
+      return deny("PROFILE_DENIED", "The full-local capability profile is disabled.");
     }
 
-    // 3. Path boundary check
+    if (request.profile === "read-only" && request.action !== "read") {
+      return deny("PROFILE_DENIED", `Action '${request.action}' is forbidden for read-only sessions.`);
+    }
+
+    if (request.command && this.forbiddenCommands.some((pattern) => pattern.test(request.command!))) {
+      return deny("COMMAND_DENIED", "Command is denied by the local safety policy.");
+    }
+
     if (request.targetPath && request.profile !== "full-local") {
-      const resolvedTarget = resolve(request.targetPath);
-      const resolvedRoot = resolve(request.projectRoot);
-
-      if (!resolvedTarget.startsWith(resolvedRoot)) {
-        return {
-          allowed: false,
-          reason: `Target path '${resolvedTarget}' is outside project boundary '${resolvedRoot}'.`
-        };
+      const root = boundaryPath(request.projectRoot);
+      const target = boundaryPath(request.targetPath);
+      if (!isWithin(root, target)) {
+        return deny("PATH_OUTSIDE_PROJECT", "Target path is outside the authenticated project boundary.");
       }
     }
 
     return { allowed: true };
   }
+}
+
+function deny(code: PolicyDenialCode, reason: string): PolicyEvaluationResult {
+  return { allowed: false, code, reason };
+}
+
+function boundaryPath(input: string): string {
+  const absolute = resolve(input);
+  if (existsSync(absolute)) return realpathSync.native(absolute);
+
+  const missingSegments: string[] = [];
+  let cursor = absolute;
+  while (!existsSync(cursor)) {
+    const parent = dirname(cursor);
+    if (parent === cursor) return absolute;
+    missingSegments.unshift(basename(cursor));
+    cursor = parent;
+  }
+
+  return join(realpathSync.native(cursor), ...missingSegments);
+}
+
+function isWithin(root: string, target: string): boolean {
+  const pathFromRoot = relative(root, target);
+  return pathFromRoot === "" || (
+    pathFromRoot !== ".." &&
+    !pathFromRoot.startsWith(`..${sep}`) &&
+    !isAbsolute(pathFromRoot)
+  );
 }
