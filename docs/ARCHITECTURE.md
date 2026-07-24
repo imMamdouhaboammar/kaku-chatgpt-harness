@@ -1,65 +1,83 @@
-# Architecture & Design Specifications
+# Architecture
 
-This document outlines the software architecture for the **Kaku + MCP-Start ChatGPT-Native Local Harness** using the C4 Model.
+## Current executable core
 
-## C4 Container Diagram
-
-```mermaid
-C4Container
-    title Container Diagram for Kaku ChatGPT Harness
-
-    Person(user, "Developer / Operator", "Uses Kaku Terminal to monitor and control local agent execution.")
-    System_Ext(chatgpt, "ChatGPT Agent", "Remote LLM sending MCP tool requests over tunnel.")
-
-    System_Boundary(harness_boundary, "Local Harness System") {
-        Container(harnessctl, "harnessctl CLI", "TypeScript / Bun Commander", "Operator command line interface for managing sessions, status, and health.")
-        Container(harnessd, "harnessd Daemon", "TypeScript / Bun", "Persistent daemon managing gateway, auth, session leases, and process trees.")
-        ContainerDb(session_store, "Session & Policy Store", "In-Memory / SQLite", "Stores active leases, capabilities, and policy decision history.")
-        Container(observability, "Observability Engine", "TypeScript Log Redactor", "Writes mode 0600 redacted structured event logs.")
-    }
-
-    System_Ext(agent_kernel, "Agent Kernel", "Governance & memory engine enforcing policies.")
-    System_Ext(desktop_cmd, "Desktop Commander", "Execution adapter for shell and file operations.")
-
-    Rel(chatgpt, harnessd, "Sends MCP tool requests", "Streamable HTTP / Auth Token")
-    Rel(user, harnessctl, "Executes CLI commands", "sh / bun")
-    Rel(harnessctl, harnessd, "IPC control & queries", "Local Unix Socket / HTTP")
-    Rel(harnessd, session_store, "Reads/writes session state")
-    Rel(harnessd, agent_kernel, "Validates execution policy")
-    Rel(harnessd, desktop_cmd, "Dispatches approved actions")
-    Rel(harnessd, observability, "Logs redacted events")
+```text
+ChatGPT or harnessctl
+  -> loopback HTTP gateway
+  -> bootstrap or lease authentication
+  -> JSON-RPC protocol boundary
+  -> session lease lookup
+  -> policy adapter
+  -> local execution adapter
+       - fs.readText
+       - fs.list
+       - process.run
+  -> redacted mode 0600 event log
 ```
 
-## C4 Sequence Diagram: Authenticated Execution Flow
+Kaku Terminal is the operator interface. `harnessd` is the local control plane. `harnessctl` is an HTTP client for lifecycle and diagnostics.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant ChatGPT as ChatGPT
-    participant Gateway as harnessd (Gateway)
-    participant Session as Session Core
-    participant Policy as Policy Adapter (Agent Kernel)
-    participant Obs as Observability Logger
-    participant Exec as Desktop Commander
+## Components
 
-    ChatGPT->>Gateway: POST /mcp/v1/tools/call (Bearer Token)
-    Gateway->>Session: Validate Lease & Token
-    alt Invalid / Expired Token
-        Session-->>Gateway: Unauthorized
-        Gateway-->>ChatGPT: 401 Unauthorized
-    else Valid Token
-        Session-->>Gateway: Lease Active (Project Scoped)
-        Gateway->>Policy: Evaluate Tool Call Policy
-        alt Policy Rejected
-            Policy-->>Gateway: Action Denied (Security Policy)
-            Gateway->>Obs: Log Security Denial (Mode 0600)
-            Gateway-->>ChatGPT: Tool Result: Denied
-        else Policy Approved
-            Policy-->>Gateway: Action Approved
-            Gateway->>Exec: Dispatch Execution Command
-            Exec-->>Gateway: Return Command Output
-            Gateway->>Obs: Write Redacted Log Entry (Mode 0600)
-            Gateway-->>ChatGPT: Tool Result: Success (Redacted)
-        end
-    end
+### harnessd
+
+`apps/harnessd` owns HTTP routing, authentication, request size limits, JSON-RPC dispatch, session revocation, and health reporting. It does not implement filesystem or process operations directly.
+
+### harnessctl
+
+`apps/harnessctl` performs real health checks and lease operations. It stores the active lease under `~/.kaku-harness/session.json` with mode `0600` and never prints the session token.
+
+### session-core
+
+`packages/session-core` issues bounded leases with one client, project root, profile, expiry, and random token. It enforces session capacity, token validation, revocation, and expiry cleanup.
+
+### protocol
+
+`packages/protocol` validates JSON-RPC 2.0 requests and produces standard success and error envelopes.
+
+### policy-adapter
+
+`packages/policy-adapter` evaluates profiles, command rules, and project path containment. Existing paths are resolved through `realpath`; missing targets are anchored to their nearest existing ancestor. This blocks sibling-prefix and symlink escapes.
+
+### execution-local
+
+`packages/execution-local` implements the current tool allowlist. Process execution uses an executable plus an argument array with `shell: false`. The adapter enforces output limits and timeouts and asks policy before every operation.
+
+### observability
+
+`packages/observability` writes structured JSONL events with mode `0600`. Sensitive values are removed from messages and recursively from context keys such as token, secret, password, authorization, and API key.
+
+## Request sequence
+
+```text
+1. Client requests a lease with the bootstrap bearer token.
+2. Daemon validates content type, size, input shape, project root, and profile.
+3. Daemon returns a random session token and scoped endpoint.
+4. Client sends a JSON-RPC request with the session bearer token.
+5. Daemon validates the lease and JSON-RPC envelope.
+6. Policy evaluates the requested path, command, and capability profile.
+7. The local executor performs the allowlisted action.
+8. Daemon returns a JSON-RPC result or structured error.
+9. Security-relevant events are written without credentials.
 ```
+
+## Trust boundaries
+
+- Loopback HTTP is a transport boundary, not proof of user identity.
+- The bootstrap token authorizes lease creation.
+- The lease token authorizes one scoped session.
+- Project scope and profile are server-enforced, not client hints.
+- A public tunnel requires an additional authenticated gateway before traffic reaches `harnessd`.
+
+## Planned layers
+
+The following are separate milestones and are not represented as completed components:
+
+- Verified atomic runtime installer and rollback
+- Durable SQLite session and recovery journal
+- macOS Keychain secret broker
+- Authenticated remote tunnel identity
+- Worktree ownership and cleanup manager
+- Structured subagent task contracts
+- Operator approval UI for elevated operations

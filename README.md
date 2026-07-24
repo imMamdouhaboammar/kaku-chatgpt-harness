@@ -1,104 +1,145 @@
-# Kaku + MCP-Start: ChatGPT-Native Local Harness 🚀
+# Kaku ChatGPT Harness
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/mamdouhaboammar/Kaku-ChatGPT-Harness)
-[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/mamdouhaboammar/Kaku-ChatGPT-Harness)
-[![Runtime](https://img.shields.io/badge/runtime-Bun_1.3.14-black.svg?logo=bun)](https://bun.sh)
-[![License](https://img.shields.io/badge/license-MIT-purple.svg)](./LICENSE)
-[![Security Hardened](https://img.shields.io/badge/security-mode_0600_logs-red.svg)](#security--capability-profiles)
+A local control plane for authenticated ChatGPT coding sessions on macOS through Kaku Terminal.
 
-> A production-grade, secure, and recoverable local control plane enabling ChatGPT to interact with macOS via Kaku Terminal, Agent Kernel governance, and Model Context Protocol (MCP).
+The project separates development source from the installed runtime:
 
----
+- Development source: `/Users/mamdouhaboammar/Documents/Kaku-ChatGPT-Harness`
+- Installed runtime: `/Users/mamdouhaboammar/kaku-chatgpt-harness`
 
-## ⚡ Quick Start
+Do not edit the installed runtime by hand. Develop and verify changes in the source repository, then install a verified commit.
+
+## Current scope
+
+The executable core currently provides:
+
+- A Bun HTTP daemon bound to `127.0.0.1` by default
+- Bootstrap authentication before session creation
+- Short-lived project-scoped session leases
+- JSON-RPC request validation
+- Project boundary and capability policy checks
+- Three local tools: `fs.readText`, `fs.list`, and `process.run`
+- Process execution without shell interpolation
+- Bounded process output and command timeouts
+- Redacted mode `0600` JSONL logs
+- A real `harnessctl` client for doctor, status, connect, and disconnect
+- Unit, integration, and security regression tests
+
+This repository does not yet claim completion of authenticated public tunneling, Keychain-backed secret brokering, durable SQLite session journals, automatic worktree management, or subagent orchestration.
+
+## Requirements
+
+- macOS
+- Bun 1.3.14 or newer
+- Kaku Terminal at `/Applications/Kaku.app`
+- Agent Kernel at `~/.agent-kernel`
+
+## Development setup
 
 ```bash
-# 1. Clone & install with Bun
-git clone https://github.com/mamdouhaboammar/Kaku-ChatGPT-Harness.git
-cd Kaku-ChatGPT-Harness
-bun install
-
-# 2. Run diagnostics check
-bun dev:cli doctor
-
-# 3. Connect current project workspace to ChatGPT
-bun dev:cli connect chatgpt --project "$PWD"
+cd /Users/mamdouhaboammar/Documents/Kaku-ChatGPT-Harness
+bun install --frozen-lockfile
+bun run verify
 ```
 
----
+`bun run verify` runs strict TypeScript validation, the complete test suite, and Bun-targeted production bundling.
 
-## ✨ Features Matrix
+Individual gates:
 
-| Feature | Description | Benefit |
-| :--- | :--- | :--- |
-| **Daemon Architecture** | Persistent local control daemon (`harnessd`) | Eliminates window-dependent state loss |
-| **Streamable HTTP MCP** | Production MCP gateway transport | Replaces deprecated SSE with lower latency |
-| **Mode 0600 Logging** | Redacted file logging with private file masks | Zero secret leakage in stdout/stderr logs |
-| **Agent Kernel Governance**| Project rules & capability profiles | Enforces policy boundaries before execution |
-| **Git Worktrees** | Automated isolated mutation boundaries | Prevents accidental overwrites of user work |
-| **CLI Management** | `harnessctl` operator interface | Single control point for sessions & health |
-
----
-
-## 📐 Architecture (C4 Model)
-
-```mermaid
-graph TD
-    subgraph Remote["Remote Client"]
-        ChatGPT["ChatGPT / Custom GPT"]
-    end
-
-    subgraph macOS["macOS Local System (Control Plane)"]
-        subgraph Gateway["MCP Gateway / Gateway Auth"]
-            GatewayAuth["Authenticated Streamable HTTP"]
-        end
-
-        subgraph Daemon["harnessd Daemon"]
-            SessionMgr["Session & Lease Manager"]
-            PolicyAdapter["Agent Kernel Policy Adapter"]
-            ObsEngine["Observability & Redacted Log (Mode 0600)"]
-        end
-
-        subgraph Adapters["Execution Adapters"]
-            DesktopCmd["Desktop Commander MCP"]
-            WorktreeMgr["Git Worktree Manager"]
-            KeychainBroker["macOS Keychain Broker"]
-        end
-
-        subgraph KakuUI["Kaku Operator UI"]
-            Kaku["Kaku Terminal (zsh / kaku.lua)"]
-        end
-    end
-
-    ChatGPT -->|Authenticated Transport| GatewayAuth
-    GatewayAuth --> SessionMgr
-    SessionMgr --> PolicyAdapter
-    PolicyAdapter -->|Policy Passed| DesktopCmd
-    PolicyAdapter -->|Isolate Mutation| WorktreeMgr
-    PolicyAdapter -->|Resolve Secret Ref| KeychainBroker
-    SessionMgr --> ObsEngine
-    Kaku -->|Operator CLI (harnessctl)| SessionMgr
+```bash
+bun run typecheck
+bun test
+bun run test:integration
+bun run test:security
+bun run build
 ```
 
----
+## Start the development daemon
 
-## 🔒 Security & Capability Profiles
+Set a private bootstrap token in the daemon and CLI environment:
 
-The harness default profile enforces project scoping and explicit trust boundaries:
+```bash
+export HARNESS_BOOTSTRAP_TOKEN="$(openssl rand -hex 32)"
+export HARNESS_LOG_PATH="/tmp/harnessd_daemon.log"
+bun run dev:daemon
+```
 
-- **Token Authenticated**: Anonymous MCP requests are rejected by default.
-- **Redacted Secret Logging**: Credentials are matched locally and replaced with `[REDACTED]`.
-- **Private Log Masks**: Session logs are forced to permission mode `0600`.
-- **Project Scoping**: File & execution tools are bound to the detected project root directory.
+The daemon refuses to start when `HARNESS_BOOTSTRAP_TOKEN` is missing.
 
----
+## Use harnessctl
 
-## 🤝 Contributing
+In a second terminal with the same bootstrap token:
 
-We welcome community contributions! Please read our [Contributing Guide](./CONTRIBUTING.md) to get started.
+```bash
+bun run apps/harnessctl/src/index.ts doctor
+bun run apps/harnessctl/src/index.ts status
+bun run apps/harnessctl/src/index.ts connect chatgpt --project "$PWD"
+bun run apps/harnessctl/src/index.ts disconnect
+```
 
----
+`connect` stores the active lease in:
 
-## 📄 License
+```text
+~/.kaku-harness/session.json
+```
 
-Distributed under the [MIT License](./LICENSE).
+The state file is written atomically with mode `0600`. The CLI never prints the session token.
+
+## HTTP flow
+
+1. `POST /mcp/v1/auth` with the bootstrap bearer token creates a lease.
+2. The lease binds one client, one absolute project root, one capability profile, and one expiry.
+3. `POST /mcp/v1/session/:sessionId` requires the lease bearer token.
+4. JSON-RPC requests are parsed before dispatch.
+5. Every filesystem or process operation is evaluated by the policy adapter.
+6. `DELETE /mcp/v1/session/:sessionId` revokes the lease.
+
+Supported JSON-RPC methods:
+
+- `ping`
+- `notifications/initialized`
+- `tools/list`
+- `tools/call`
+
+## Capability profiles
+
+- `read-only`: permits file reads and directory listing only
+- `project-write`: permits the current tool set inside the authenticated project
+- `full-local`: disabled unless the daemon starts with `HARNESS_ALLOW_FULL_LOCAL=1`
+
+`full-local` must not be enabled for a publicly reachable endpoint.
+
+## Security model
+
+The daemon is a high-trust local service. Its main boundaries are:
+
+- Loopback binding by default
+- Bootstrap authentication before lease issuance
+- Separate random token for each lease
+- Absolute project scope stored on the lease
+- Symlink-aware path containment
+- No shell expansion for process arguments
+- Output and request size limits
+- Redacted private logs
+
+A tunnel is not a security boundary by itself. Any remote exposure must add authenticated transport, endpoint ownership, expiry, and explicit project scope before forwarding traffic to the daemon.
+
+See [`SECURITY.md`](./SECURITY.md) for reporting and operational guidance.
+
+## Development to runtime flow
+
+Until the verified installer is merged, keep development and runtime separate:
+
+1. Work in the development repository or an isolated worktree.
+2. Run `bun run verify`.
+3. Review the committed diff and security-sensitive changes.
+4. Do not replace `/Users/mamdouhaboammar/kaku-chatgpt-harness` manually.
+5. Deploy only through the versioned installer and rollback flow once available.
+
+## Architecture
+
+See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the container and request sequence diagrams.
+
+## License
+
+MIT. See [`LICENSE`](./LICENSE).

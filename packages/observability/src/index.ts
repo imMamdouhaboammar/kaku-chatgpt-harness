@@ -10,13 +10,15 @@ export interface LogEvent {
 
 export class RedactedLogger {
   private logFilePath: string;
-  private secretPatterns: RegExp[] = [
-    /sk-[a-zA-Z0-9]{32,}/g, // OpenAI style key
-    /ghp_[a-zA-Z0-9]{36}/g, // GitHub PAT
-    /bearer\s+[a-zA-Z0-9\-._~+/]+=*/gi, // Bearer token
-    /password["']?\s*[:=]\s*["']?[^"'\s]+/gi, // Password strings
-    /api[-_]?key["']?\s*[:=]\s*["']?[^"'\s]+/gi // API keys
+  private readonly secretPatterns: RegExp[] = [
+    /sk-[a-zA-Z0-9]{32,}/g,
+    /ghp_[a-zA-Z0-9]{36}/g,
+    /harness_[a-zA-Z0-9_-]{16,}/g,
+    /bearer\s+[a-zA-Z0-9\-._~+/]+=*/gi,
+    /password["']?\s*[:=]\s*["']?[^"'\s]+/gi,
+    /api[-_]?key["']?\s*[:=]\s*["']?[^"'\s]+/gi
   ];
+  private readonly sensitiveKeyPattern = /(token|secret|password|authorization|api[-_]?key)/i;
 
   constructor(logFilePath: string) {
     this.logFilePath = logFilePath;
@@ -40,13 +42,29 @@ export class RedactedLogger {
     return sanitized;
   }
 
+  public redactValue(value: unknown, key?: string, seen = new WeakSet<object>()): unknown {
+    if (key && this.sensitiveKeyPattern.test(key)) return "[REDACTED_SECRET]";
+    if (typeof value === "string") return this.redact(value);
+    if (value === null || typeof value !== "object") return value;
+    if (seen.has(value)) return "[CIRCULAR]";
+    seen.add(value);
+    if (Array.isArray(value)) return value.map((item) => this.redactValue(item, undefined, seen));
+
+    return Object.fromEntries(
+      Object.entries(value).map(([childKey, childValue]) => [
+        childKey,
+        this.redactValue(childValue, childKey, seen)
+      ])
+    );
+  }
+
   public log(level: LogEvent["level"], message: string, sessionId?: string, context?: Record<string, unknown>): LogEvent {
     const event: LogEvent = {
       timestamp: new Date().toISOString(),
       level,
       sessionId,
       message: this.redact(message),
-      context: context ? JSON.parse(this.redact(JSON.stringify(context))) : undefined
+      context: context ? this.redactValue(context) as Record<string, unknown> : undefined
     };
 
     const line = JSON.stringify(event) + "\n";

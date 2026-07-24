@@ -1,7 +1,7 @@
 {
   "name": "kaku-chatgpt-harness",
   "version": "0.0.1",
-  "description": "Production-grade local harness designed for ChatGPT controlling macOS through Kaku Terminal",
+  "description": "Authenticated project-scoped local harness for ChatGPT coding sessions through Kaku Terminal",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -12,6 +12,8 @@
     "dev:daemon": "bun run --watch apps/harnessd/src/index.ts",
     "dev:cli": "bun run apps/harnessctl/src/index.ts",
     "test": "bun test",
+    "test:integration": "bun test tests/integration",
+    "test:security": "bun test tests/security",
     "typecheck": "tsc --noEmit",
     "build": "bun build --target=bun apps/harnessd/src/index.ts apps/harnessctl/src/index.ts --outdir dist",
     "verify": "bun run typecheck && bun test && bun run build"
