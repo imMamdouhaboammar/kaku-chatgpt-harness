@@ -51,7 +51,7 @@ export class HarnessDaemon {
         // Fallback to defaults if body is empty or non-JSON
       }
 
-      const lease = this.sessionMgr.createSession(client, projectRoot, profile);
+      const lease = this.sessionMgr.createSession({ client, projectRoot, profile });
       this.logger.log("INFO", `Created session ${lease.sessionId} for client '${client}'`);
       return new Response(
         JSON.stringify({

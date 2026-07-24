@@ -1,4 +1,20 @@
+import { timingSafeEqual } from "node:crypto";
+import { isAbsolute, resolve } from "node:path";
+
 export type CapabilityProfile = "read-only" | "project-write" | "full-local";
+
+export interface CreateSessionInput {
+  client: string;
+  projectRoot: string;
+  profile?: CapabilityProfile;
+  ttlMs?: number;
+}
+
+export interface SessionManagerOptions {
+  defaultTtlMs?: number;
+  maxSessions?: number;
+  allowFullLocal?: boolean;
+}
 
 export interface SessionLease {
   sessionId: string;
@@ -13,50 +29,68 @@ export interface SessionLease {
   worktreePaths: string[];
 }
 
-export class SessionManager {
-  private sessions: Map<string, SessionLease> = new Map();
-  private defaultTtlMs: number;
-  public currentClient: string = "uninitialized";
+const DEFAULT_TTL_MS = 60 * 60 * 1000;
+const DEFAULT_MAX_SESSIONS = 32;
+const PROFILES = new Set<CapabilityProfile>(["read-only", "project-write", "full-local"]);
 
-  constructor(defaultTtlMs = 3600 * 1000) {
-    this.defaultTtlMs = defaultTtlMs;
+export class SessionManager {
+  private readonly sessions = new Map<string, SessionLease>();
+  private readonly defaultTtlMs: number;
+  private readonly maxSessions: number;
+  private readonly allowFullLocal: boolean;
+
+  constructor(options: SessionManagerOptions = {}) {
+    this.defaultTtlMs = positiveInteger(options.defaultTtlMs ?? DEFAULT_TTL_MS, "defaultTtlMs");
+    this.maxSessions = positiveInteger(options.maxSessions ?? DEFAULT_MAX_SESSIONS, "maxSessions");
+    this.allowFullLocal = options.allowFullLocal ?? false;
   }
 
-  public createSession(client: string, projectRoot: string, profile: CapabilityProfile = "project-write"): SessionLease {
-    const sessionId = crypto.randomUUID();
-    const authToken = "harness_" + crypto.randomUUID().replace(/-/g, "");
-    const now = Date.now();
-    this.currentClient = client || "chatgpt";
+  public get currentClient(): string {
+    this.reapOrphans();
+    return Array.from(this.sessions.values()).at(-1)?.client ?? "uninitialized";
+  }
 
+  public createSession(input: CreateSessionInput): SessionLease {
+    this.reapOrphans();
+    if (this.sessions.size >= this.maxSessions) {
+      throw new Error(`Active session capacity of ${this.maxSessions} has been reached.`);
+    }
+
+    const client = input.client.trim();
+    if (!client) throw new Error("Session client identity is required.");
+    if (!isAbsolute(input.projectRoot)) throw new Error("Session projectRoot must be absolute.");
+
+    const profile = input.profile ?? "project-write";
+    if (!PROFILES.has(profile)) throw new Error(`Unsupported capability profile: ${String(profile)}`);
+    if (profile === "full-local" && !this.allowFullLocal) {
+      throw new Error("The full-local capability profile is disabled.");
+    }
+
+    const now = Date.now();
     const lease: SessionLease = {
-      sessionId,
-      client: this.currentClient,
-      projectRoot,
+      sessionId: crypto.randomUUID(),
+      client,
+      projectRoot: resolve(input.projectRoot),
       profile,
-      authToken,
+      authToken: `harness_${crypto.randomUUID().replaceAll("-", "")}`,
       createdAt: now,
       lastSeenAt: now,
-      ttlMs: this.defaultTtlMs,
+      ttlMs: positiveInteger(input.ttlMs ?? this.defaultTtlMs, "ttlMs"),
       processIds: [],
       worktreePaths: []
     };
 
-    this.sessions.set(sessionId, lease);
+    this.sessions.set(lease.sessionId, lease);
     return lease;
-  }
-
-  public getCurrentClient(): string {
-    return this.currentClient;
   }
 
   public validateToken(sessionId: string, token: string): boolean {
     const lease = this.sessions.get(sessionId);
-    if (!lease) return false;
-    if (this.isExpired(lease)) {
-      this.sessions.delete(sessionId);
+    if (!lease || this.isExpired(lease)) {
+      if (lease) this.sessions.delete(sessionId);
       return false;
     }
-    if (lease.authToken !== token) return false;
+    if (!secureEqual(lease.authToken, token)) return false;
 
     lease.lastSeenAt = Date.now();
     return true;
@@ -71,6 +105,10 @@ export class SessionManager {
     return lease;
   }
 
+  public getCurrentClient(): string {
+    return this.currentClient;
+  }
+
   public listActiveSessions(): SessionLease[] {
     this.reapOrphans();
     return Array.from(this.sessions.values());
@@ -82,9 +120,8 @@ export class SessionManager {
 
   public reapOrphans(): number {
     let reaped = 0;
-    const now = Date.now();
     for (const [id, lease] of this.sessions.entries()) {
-      if (now - lease.lastSeenAt > lease.ttlMs) {
+      if (this.isExpired(lease)) {
         this.sessions.delete(id);
         reaped++;
       }
@@ -95,4 +132,17 @@ export class SessionManager {
   private isExpired(lease: SessionLease): boolean {
     return Date.now() - lease.lastSeenAt > lease.ttlMs;
   }
+}
+
+function positiveInteger(value: number, name: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return value;
+}
+
+function secureEqual(expected: string, received: string): boolean {
+  const expectedBytes = Buffer.from(expected);
+  const receivedBytes = Buffer.from(received);
+  return expectedBytes.length === receivedBytes.length && timingSafeEqual(expectedBytes, receivedBytes);
 }
