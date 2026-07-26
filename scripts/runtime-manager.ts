@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { applyShellIntegration, managedShellIntegrationPaths } from "./shell-integration";
 
 export interface InstallOptions {
   sourceRoot: string;
@@ -204,6 +205,7 @@ function writeUserIntegrations(destination: string, homeDir: string, bunPath: st
   const plistPath = join(launchAgents, "com.kaku.chatgpt-harness.plist");
   const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n  <key>Label</key><string>com.kaku.chatgpt-harness</string>\n  <key>ProgramArguments</key>\n  <array><string>${xmlEscape(join(destination, "bin", "harnessd-launch"))}</string></array>\n  <key>RunAtLoad</key><true/>\n  <key>KeepAlive</key><true/>\n  <key>StandardOutPath</key><string>${xmlEscape(join(destination, ".runtime", "launchd.out.log"))}</string>\n  <key>StandardErrorPath</key><string>${xmlEscape(join(destination, ".runtime", "launchd.err.log"))}</string>\n</dict>\n</plist>\n`;
   writeFileAtomic(plistPath, plist, 0o600);
+  applyShellIntegration(homeDir);
 }
 
 function writeBootstrapToken(path: string, token: string): void {
@@ -469,7 +471,8 @@ function managedIntegrationPaths(homeDir: string): string[] {
     join(homeDir, ".local", "bin", "harnessctl"),
     join(homeDir, ".config", "kaku", "zsh", "plugins", "chatgpt-harness.zsh"),
     join(homeDir, "Library", "LaunchAgents", "com.kaku.chatgpt-harness.plist"),
-    join(homeDir, "Library", "LaunchAgents", "com.kaku.harnessd.plist")
+    join(homeDir, "Library", "LaunchAgents", "com.kaku.harnessd.plist"),
+    ...managedShellIntegrationPaths(homeDir)
   ];
 }
 
