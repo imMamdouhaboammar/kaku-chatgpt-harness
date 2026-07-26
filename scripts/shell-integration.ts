@@ -14,6 +14,7 @@ export const SHELL_MARKER_END = "# KAKU_SHELL_INTEGRATION_END";
 const ZSHRC_BLOCK = [
   SHELL_MARKER_START,
   'if [[ -o interactive ]] && { [[ "${TERM:-}" == "kaku" ]] || [[ -n "${WEZTERM_PANE:-}" ]] || [[ "${TERM_PROGRAM:l}" == "kaku" ]]; }; then',
+  '  [[ -r "$HOME/.config/kaku/zsh/kaku.zsh" ]] && source "$HOME/.config/kaku/zsh/kaku.zsh"',
   '  [[ -r "$HOME/.config/kaku/zsh/plugins/kaku-shell-loader.zsh" ]] && source "$HOME/.config/kaku/zsh/plugins/kaku-shell-loader.zsh"',
   'fi',
   SHELL_MARKER_END
@@ -25,7 +26,6 @@ const KAKU_SHELL_LOADER = [
   'if [[ "${TERM:-}" != "kaku" && -z "${WEZTERM_PANE:-}" && "${TERM_PROGRAM:l}" != "kaku" ]]; then return 0; fi',
   'typeset -g _KAKU_SHELL_LOADER_LOADED=1',
   'source "$HOME/.config/kaku/zsh/plugins/kaku-harness-env.zsh"',
-  '[[ -r "$HOME/.config/kaku/zsh/kaku.zsh" ]] && source "$HOME/.config/kaku/zsh/kaku.zsh"',
   '[[ -r "$HOME/.config/kaku/zsh/plugins/chatgpt-harness.zsh" ]] && source "$HOME/.config/kaku/zsh/plugins/chatgpt-harness.zsh"',
   '[[ -r "$HOME/.config/kaku/zsh/plugins/kaku-harness-interactive.zsh" ]] && source "$HOME/.config/kaku/zsh/plugins/kaku-harness-interactive.zsh"',
   ""

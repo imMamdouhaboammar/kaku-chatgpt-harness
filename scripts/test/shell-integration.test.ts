@@ -28,6 +28,7 @@ describe("shell startup rewriting", () => {
     expect(rewriteZshenv(legacyZshenv)).not.toContain("plugins/env.zsh");
     const rewritten = rewriteZshrc(legacyZshrc);
     expect(rewritten.match(/source .*kaku-shell-loader\.zsh/g)?.length).toBe(1);
+    expect(rewritten.match(/source .*\/kaku\.zsh/g)?.length).toBe(1);
     expect(rewriteZshrc(rewritten)).toBe(rewritten);
   });
 
