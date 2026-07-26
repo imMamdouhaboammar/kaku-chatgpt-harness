@@ -9,6 +9,35 @@ The project separates development source from the installed runtime:
 
 Do not edit the installed runtime by hand. Develop and verify changes in the source repository, then install a verified commit.
 
+
+<!-- project-story:start -->
+<details open>
+  <summary><strong>Why I built Kaku ChatGPT Harness</strong></summary>
+  <br />
+  <table>
+    <tr>
+      <td width="118" align="center" valign="top">
+        <img src="./assets/readme/project-mark.svg" width="88" alt="Kaku ChatGPT Harness repository mark" />
+      </td>
+      <td valign="top">
+        <p><strong>What is Kaku ChatGPT Harness?</strong> A project-scoped local control plane for authenticated ChatGPT coding sessions through Kaku Terminal on macOS.</p>
+        <p><strong>Built from a recurring problem:</strong> Remote terminal access becomes unsafe and unreliable when sessions lack clear authentication, project boundaries, capability policies, and regression tests.</p>
+        <p><strong>Practical goal:</strong> Give ChatGPT a bounded local coding path with short-lived leases, safe process execution, private logs, verification, and rollback.</p>
+        <p><strong>Who it is for:</strong> macOS developers connecting ChatGPT to Kaku Terminal for controlled local repository work.</p>
+        <p><strong>Topics:</strong> ChatGPT local coding harness · Kaku Terminal MCP · project scoped terminal access · authenticated coding session</p>
+      </td>
+    </tr>
+  </table>
+  <p><strong>Daily development summary</strong></p>
+  <ul>
+      <li>4 commits landed: fix: align isolated shell with Kaku doctor; fix: detect duplicate remote launchers.</li>
+      <li>Daily summary covers 4 public activity items from the last 1 day.</li>
+      <li>Documentation and project status remain aligned with the repository’s current public state.</li>
+  </ul>
+  <p><sub>Updated 2026-07-26T06:35:05.483Z · Deterministic public-activity summary</sub></p>
+</details>
+<!-- project-story:end -->
+
 ## Current scope
 
 The executable core currently provides:
