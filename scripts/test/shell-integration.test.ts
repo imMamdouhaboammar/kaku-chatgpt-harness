@@ -63,8 +63,7 @@ describe("installed shell integration", () => {
     expect(launcher).toContain("already running");
     expect(launcher).toContain("@wonderwhy-er/desktop-commander@0.2.46");
     expect(launcher).not.toContain("@latest");
-    expect(launcher).toContain("@wonderwhy-er/desktop-commander@0.2.46");
-    expect(launcher).not.toContain("@latest");
+    expect(launcher).toContain("dedupe");
     const doctor = join(home, ".local", "bin", "kaku-doctor");
     expect(readFileSync(doctor, "utf8")).toContain("kaku-shell-regression.sh");
     expect(Bun.spawnSync(["/bin/bash", "-n", join(home, ".local", "bin", "mcp-start")]).exitCode).toBe(0);
@@ -77,7 +76,7 @@ describe("installed shell integration", () => {
     const fakeBin = join(home, "fake-bin");
     mkdirSync(fakeBin, { recursive: true });
     const fakePs = join(fakeBin, "ps");
-    writeFileSync(fakePs, '#!/usr/bin/env bash\nprintf " 4242 node /tmp/desktop-commander remote\n"\n');
+    writeFileSync(fakePs, '#!/usr/bin/env bash\nprintf " 4242 npm exec @wonderwhy-er/desktop-commander@0.2.46 remote\n"\n');
     chmodSync(fakePs, 0o755);
     const result = Bun.spawnSync({
       cmd: [join(home, ".local", "bin", "mcp-start"), "status"],
@@ -87,6 +86,24 @@ describe("installed shell integration", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("4242");
+  });
+
+  test("reports duplicate Remote Desktop launcher instances", () => {
+    const home = fixtureHome();
+    applyShellIntegration(home);
+    const fakeBin = join(home, "fake-bin");
+    mkdirSync(fakeBin, { recursive: true });
+    const fakePs = join(fakeBin, "ps");
+    writeFileSync(fakePs, '#!/usr/bin/env bash\nprintf " 4001 npm exec @wonderwhy-er/desktop-commander@0.2.46 remote\n 4002 npm exec @wonderwhy-er/desktop-commander@0.2.46 remote\n"\n');
+    chmodSync(fakePs, 0o755);
+    const result = Bun.spawnSync({
+      cmd: [join(home, ".local", "bin", "mcp-start"), "status"],
+      env: { HOME: home, PATH: `${fakeBin}:/usr/bin:/bin` },
+      stdout: "pipe",
+      stderr: "pipe"
+    });
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr.toString()).toContain("Duplicate");
   });
 });
 

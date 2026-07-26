@@ -91,32 +91,49 @@ STATE_DIR="$HOME/.local/state/desktop-commander"
 LOG_FILE="$STATE_DIR/remote.log"
 mkdir -p "$STATE_DIR"
 remote_pids() {
-  ps ax -o pid=,command= | awk '$0 ~ /desktop-commander/ && $0 ~ /[[:space:]]remote([[:space:]]|$)/ {print $1}'
+  ps ax -o pid=,command= | awk 'index($0, "npm exec @wonderwhy-er/desktop-commander") && $0 ~ / remote([[:space:]]|$)/ {print $1}'
 }
 status() {
-  local pids
-  pids="$(remote_pids | tr '\n' ' ' | xargs)"
-  if [[ -n "$pids" ]]; then echo "Remote Desktop Commander is running: $pids"; return 0; fi
-  echo "Remote Desktop Commander is not running."; return 1
+  local pids count
+  pids="$(remote_pids)"
+  count="$(printf '%s\n' "$pids" | sed '/^$/d' | wc -l | tr -d ' ')"
+  if [[ "$count" -eq 0 ]]; then echo "Remote Desktop Commander is not running."; return 1; fi
+  if [[ "$count" -gt 1 ]]; then
+    echo "Duplicate Remote Desktop Commander launchers detected: $(printf '%s' "$pids" | tr '\n' ' ' | xargs)" >&2
+    return 2
+  fi
+  echo "Remote Desktop Commander is running: $pids"
 }
 case "\${1:-start}" in
   start)
-    if status >/dev/null 2>&1; then status; echo "Remote Desktop Commander already running; no duplicate started."; exit 0; fi
+    pids="$(remote_pids)"
+    if [[ -n "$pids" ]]; then status || true; echo "Remote Desktop Commander already running; no duplicate started."; exit 0; fi
     nohup npx --yes @wonderwhy-er/desktop-commander@0.2.46 remote >>"$LOG_FILE" 2>&1 &
     echo $! > "$STATE_DIR/launcher.pid"
     sleep 2
     status
     ;;
   status) status ;;
+  dedupe)
+    pids="$(remote_pids)"
+    count="$(printf '%s\n' "$pids" | sed '/^$/d' | wc -l | tr -d ' ')"
+    [[ "$count" -le 1 ]] && { status || true; exit 0; }
+    keep="$(printf '%s\n' "$pids" | tail -n 1)"
+    while read -r pid; do
+      [[ -z "$pid" || "$pid" == "$keep" ]] && continue
+      /bin/kill -TERM -- "-$pid" 2>/dev/null || /bin/kill -TERM "$pid" 2>/dev/null || true
+    done <<< "$pids"
+    echo "Kept newest Remote Desktop Commander launcher: $keep"
+    ;;
   stop)
     pids="$(remote_pids)"
     [[ -z "$pids" ]] && { echo "Remote Desktop Commander is not running."; exit 0; }
-    while read -r pid; do [[ -n "$pid" ]] && kill -TERM "$pid" 2>/dev/null || true; done <<< "$pids"
+    while read -r pid; do [[ -n "$pid" ]] && /bin/kill -TERM -- "-$pid" 2>/dev/null || true; done <<< "$pids"
     echo "Stop signal sent to owned Remote Desktop Commander launchers."
     ;;
   restart) "$0" stop; sleep 2; "$0" start ;;
   doctor) exec "$HOME/.local/bin/kaku-doctor" ;;
-  *) echo "Usage: mcp-start {start|status|stop|restart|doctor}" >&2; exit 2 ;;
+  *) echo "Usage: mcp-start {start|status|dedupe|stop|restart|doctor}" >&2; exit 2 ;;
 esac
 `;
 
