@@ -299,13 +299,21 @@ function startOwnedLaunchAgent(destination: string, homeDir: string): void {
   ));
   if (!selected) throw new Error(`No managed LaunchAgent references runtime ${destination}.`);
 
+  let newlyBootstrapped = false;
   try {
     execFileSync("launchctl", ["bootstrap", launchDomain(), selected.path], { stdio: "pipe" });
+    newlyBootstrapped = true;
   } catch (error) {
     const detail = commandErrorText(error);
     if (!detail.includes("already loaded") && !detail.includes("service already loaded")) throw error;
   }
-  execFileSync("launchctl", ["kickstart", "-k", `${launchDomain()}/${selected.label}`], { stdio: "pipe" });
+
+  // RunAtLoad starts a newly bootstrapped service. An immediate kickstart can race
+  // launchd registration and report "Could not find service" even though the
+  // service appears moments later. Kickstart only an already-loaded service.
+  if (!newlyBootstrapped) {
+    execFileSync("launchctl", ["kickstart", "-k", `${launchDomain()}/${selected.label}`], { stdio: "pipe" });
+  }
 }
 
 function stopOwnedPortProcesses(destination: string, port: number): void {
