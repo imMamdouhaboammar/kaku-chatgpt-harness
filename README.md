@@ -12,29 +12,31 @@ Do not edit the installed runtime by hand. Develop and verify changes in the sou
 
 <!-- project-story:start -->
 <details open>
-  <summary><strong>Why I built Kaku ChatGPT Harness</strong></summary>
+  <summary><strong>Problem to project: Why I built Kaku ChatGPT Harness</strong></summary>
   <br />
+  <p align="center"><img src="https://raw.githubusercontent.com/imMamdouhaboammar/imMamdouhaboammar/main/assets/profile/project-badges.svg" width="488" alt="Real friction, building in public, daily pulse" /></p>
   <table>
     <tr>
-      <td width="118" align="center" valign="top">
-        <img src="./assets/readme/project-mark.svg" width="88" alt="Kaku ChatGPT Harness repository mark" />
-      </td>
-      <td valign="top">
-        <p><strong>What is Kaku ChatGPT Harness?</strong> A project-scoped local control plane for authenticated ChatGPT coding sessions through Kaku Terminal on macOS.</p>
-        <p><strong>Built from a recurring problem:</strong> Remote terminal access becomes unsafe and unreliable when sessions lack clear authentication, project boundaries, capability policies, and regression tests.</p>
-        <p><strong>Practical goal:</strong> Give ChatGPT a bounded local coding path with short-lived leases, safe process execution, private logs, verification, and rollback.</p>
-        <p><strong>Who it is for:</strong> macOS developers connecting ChatGPT to Kaku Terminal for controlled local repository work.</p>
-        <p><strong>Topics:</strong> ChatGPT local coding harness · Kaku Terminal MCP · project scoped terminal access · authenticated coding session</p>
-      </td>
+      <td width="104" align="center" valign="middle"><img src="./assets/readme/project-mark.svg" width="76" alt="Kaku ChatGPT Harness repository mark" /></td>
+      <td valign="middle"><strong>Kaku ChatGPT Harness</strong><br />A project-scoped local control plane for authenticated ChatGPT coding sessions through Kaku Terminal on macOS.</td>
     </tr>
   </table>
-  <p><strong>Daily development summary</strong></p>
+  <table>
+    <tr>
+      <td width="50%" valign="top"><strong>Recurring problem</strong><br />Remote terminal access becomes unsafe and unreliable when sessions lack clear authentication, project boundaries, capability policies, and regression tests.</td>
+      <td width="50%" valign="top"><strong>Practical goal</strong><br />Give ChatGPT a bounded local coding path with short-lived leases, safe process execution, private logs, verification, and rollback.</td>
+    </tr>
+    <tr>
+      <td width="50%" valign="top"><strong>Built for</strong><br />macOS developers connecting ChatGPT to Kaku Terminal for controlled local repository work.</td>
+      <td width="50%" valign="top"><strong>Search terms</strong><br />ChatGPT local coding harness · Kaku Terminal MCP · project scoped terminal access · authenticated coding session</td>
+    </tr>
+  </table>
+  <p><strong>Daily build pulse</strong></p>
   <ul>
-      <li>4 commits landed: fix: align isolated shell with Kaku doctor; fix: detect duplicate remote launchers.</li>
-      <li>Daily summary covers 4 public activity items from the last 1 day.</li>
-      <li>Documentation and project status remain aligned with the repository’s current public state.</li>
+      <li>5 commits landed: docs: add dynamic project story card; fix: align isolated shell with Kaku doctor.</li>
+      <li>1 pull request updated, led by #1: docs: add dynamic project story card.</li>
+      <li>Daily summary covers 6 public activity items from the last 1 day.</li>
   </ul>
-  <p><sub>Updated 2026-07-26T06:35:05.483Z · Deterministic public-activity summary</sub></p>
 </details>
 <!-- project-story:end -->
 
