@@ -96,3 +96,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isJsonRpcId(value: unknown): value is JsonRpcId {
   return value === null || typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
 }
+
+export * from "./acp.js";
+

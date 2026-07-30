@@ -149,3 +149,8 @@ function secureEqual(expected: string, received: string): boolean {
   const receivedBytes = Buffer.from(received);
   return expectedBytes.length === receivedBytes.length && timingSafeEqual(expectedBytes, receivedBytes);
 }
+
+export * from "./prompt-cache.js";
+export * from "./confidence-stepping.js";
+export * from "./vector-memory.js";
+
