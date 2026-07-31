@@ -33,10 +33,9 @@ Do not edit the installed runtime by hand. Develop and verify changes in the sou
   </table>
   <p><strong>Daily build pulse</strong></p>
   <ul>
-      <li>Published v1.0.0: v1.0.0 Initial Production Release.</li>
-      <li>21 commits landed: docs: add dynamic project story card; fix: align isolated shell with Kaku doctor.</li>
-      <li>1 pull request updated, led by #1: docs: add dynamic project story card.</li>
-      <li>Daily summary covers 23 public activity items from the last 7 days.</li>
+      <li>1 commit landed: feat(harness): integrate jcode architecture, ACP state, prompt cache, confidence steppi….</li>
+      <li>Daily summary covers 1 public activity item from the last 1 day.</li>
+      <li>Documentation and project status remain aligned with the repository’s current public state.</li>
   </ul>
 </details>
 <!-- project-story:end -->
