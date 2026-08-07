@@ -33,9 +33,9 @@ Do not edit the installed runtime by hand. Develop and verify changes in the sou
   </table>
   <p><strong>Daily build pulse</strong></p>
   <ul>
-      <li>1 commit landed: feat(harness): integrate jcode architecture, ACP state, prompt cache, confidence steppi….</li>
-      <li>Daily summary covers 1 public activity item from the last 7 days.</li>
-      <li>Documentation and project status remain aligned with the repository’s current public state.</li>
+      <li>No public repository changes were recorded in the last 7 days.</li>
+      <li>The project purpose and documented usage remain unchanged.</li>
+      <li>The next update will appear automatically when public activity is detected.</li>
   </ul>
 </details>
 <!-- project-story:end -->
